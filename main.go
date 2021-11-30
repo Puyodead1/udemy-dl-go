@@ -1,0 +1,431 @@
+package main
+
+import (
+	"archive/zip"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"path"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/op/go-logging"
+)
+
+var logger = logging.MustGetLogger("udemy-dl")
+var loggerBackend = logging.NewLogBackend(os.Stderr, "", 0)
+var loggerFormat = logging.MustStringFormatter(
+	`%{color}%{time:15:04:05} %{level:.4s} ▶ [%{shortfunc}] %{color:reset} %{message}`,
+)
+var backendFormatter = logging.NewBackendFormatter(loggerBackend, loggerFormat)
+
+var httpClient = &http.Client{Timeout: time.Second * 10}
+
+func getJson(url string) (Release, error) {
+	target := Release{}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return target, err
+	}
+
+	res, getErr := httpClient.Do(req)
+	if getErr != nil {
+		return target, getErr
+	}
+
+	if res.Body != nil {
+		defer res.Body.Close()
+	}
+
+	body, readErr := ioutil.ReadAll(res.Body)
+	if readErr != nil {
+		return target, readErr
+	}
+
+	jsonErr := json.Unmarshal(body, &target)
+	if jsonErr != nil {
+		return target, jsonErr
+	}
+
+	return target, nil
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	return false
+}
+
+func PrintDownloadPercent(done chan int64, path string, total int64) {
+	var stop bool = false
+	file, err := os.Open(path)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	defer file.Close()
+	for {
+		select {
+		case <-done:
+			stop = true
+		default:
+			fi, err := file.Stat()
+			if err != nil {
+				logger.Fatal(err)
+			}
+
+			size := fi.Size()
+			if size == 0 {
+				size = 1
+			}
+
+			var percent float64 = float64(size) / float64(total) * 100
+			fmt.Printf("%.0f", percent)
+			fmt.Println("%")
+		}
+
+		if stop {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+}
+
+func DownloadFile(url string, dest string) error {
+
+	file := path.Base(url)
+
+	logger.Infof("Downloading file %s\n", file)
+
+	var pathh bytes.Buffer
+	pathh.WriteString(dest)
+	pathh.WriteString("/")
+	pathh.WriteString(file)
+
+	start := time.Now()
+
+	out, err := os.Create(pathh.String())
+
+	if err != nil {
+		logger.Debugf(pathh.String())
+		return err
+	}
+
+	defer out.Close()
+
+	headResp, err := http.Head(url)
+
+	if err != nil {
+		return err
+	}
+
+	defer headResp.Body.Close()
+
+	size, err := strconv.Atoi(headResp.Header.Get("Content-Length"))
+
+	if err != nil {
+		return err
+	}
+
+	done := make(chan int64)
+
+	go PrintDownloadPercent(done, pathh.String(), int64(size))
+
+	resp, err := http.Get(url)
+
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	n, err := io.Copy(out, resp.Body)
+
+	if err != nil {
+		return err
+	}
+
+	done <- n
+
+	elapsed := time.Since(start)
+	logger.Infof("Download completed in %s", elapsed)
+	return nil
+}
+
+func FindElementByString(assets []Asset, query string) *Asset {
+	for _, asset := range assets {
+		if strings.Contains(asset.Name, runtime.GOOS) && strings.Contains(asset.Name, runtime.GOARCH) {
+			return &asset
+		}
+	}
+	return nil
+}
+
+func makeDirectoryIfNotExists(fpath string) error {
+	if !exists(fpath) {
+		err := os.MkdirAll(fpath, 0777)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func getLatestGithubRelease(url string) (Release, error) {
+	// get latest release
+	data, err1 := getJson(url)
+
+	// check for error
+	if err1 != nil {
+		return data, err1
+	}
+	return data, nil
+}
+
+/*
+* Source: https://golangcode.com/unzip-files-in-go/
+ */
+func unzip(src string, dest string) ([]string, error) {
+
+	var filenames []string
+
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return filenames, err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+
+		// Store filename/path for returning and using later on
+		fpath := path.Join(dest, f.Name)
+
+		// Check for ZipSlip.
+		if !strings.HasPrefix(fpath, path.Clean(dest)) {
+			return filenames, fmt.Errorf("%s: illegal file path", dest)
+		}
+
+		filenames = append(filenames, fpath)
+
+		if f.FileInfo().IsDir() {
+			// Make Folder
+			os.MkdirAll(dest, os.ModePerm)
+			continue
+		}
+
+		// Make File
+		if err = os.MkdirAll(path.Dir(fpath), os.ModePerm); err != nil {
+			return filenames, err
+		}
+
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return filenames, err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return filenames, err
+		}
+
+		_, err = io.Copy(outFile, rc)
+
+		// Close the file without defer to close before next iteration of loop
+		outFile.Close()
+		rc.Close()
+
+		if err != nil {
+			return filenames, err
+		}
+	}
+	return filenames, nil
+}
+
+func handleBinaryUpdate(depName string, latestRelease Release, asset Asset, depFolder string, versionFilePath string) bool {
+	archiveFilePath := path.Join(depFolder, asset.Name)
+
+	// update binary
+	if !exists(archiveFilePath) {
+		logger.Debugf("Downloading %s to %s\n", depName, archiveFilePath)
+
+		// download binary
+		err := DownloadFile(asset.Browser_Download_URL, depFolder)
+		if err != nil {
+			logger.Errorf("Error downloading %s: %s\n", depName, err.Error())
+			return false
+		}
+	} else {
+		logger.Debugf("Found existing %s archive: %s\n", depName, archiveFilePath)
+	}
+
+	logger.Debugf("Unzipping %s", depName)
+
+	// unzip binary
+	files, err := unzip(archiveFilePath, depFolder)
+	if err != nil {
+		logger.Errorf("Error unzipping %s archive: %s\n", depName, err.Error())
+		return false
+	}
+
+	logger.Infof("%s unzipped, Moving binaries", depName)
+
+	// move executable files to bin folder
+	for _, v := range files {
+		if strings.HasSuffix(v, ".exe") {
+			logger.Debugf("Moving executable file %s to %s\n", v, depFolder)
+			err := os.Rename(v, path.Join(depFolder, path.Base(v)))
+			if err != nil {
+				logger.Errorf("Error moving executable file %s to %s: %s\n", v, depFolder, err.Error())
+				return false
+			}
+		}
+	}
+
+	logger.Debug("Removing temp folder")
+
+	err1 := os.RemoveAll(files[0])
+	if err1 != nil {
+		logger.Errorf("Error removing temp folder: %s\n", err1.Error())
+		return false
+	}
+
+	// write version to file
+	err2 := ioutil.WriteFile(versionFilePath, []byte(latestRelease.Tag_Name), 0644)
+	// check for error
+	if err2 != nil {
+		logger.Errorf("Error writing %s version file: %s\n", depName, err2.Error())
+		return false
+	}
+
+	return true
+}
+
+func checkFFMPEG() bool {
+	depFolder := path.Join("bin", "ffmpeg")
+
+	err := makeDirectoryIfNotExists(depFolder)
+	if err != nil {
+		logger.Fatalf("Error creating directory %s: %s", depFolder, err.Error())
+		return false
+	}
+
+	versionFilePath := path.Join(depFolder, "ffmpeg.version")
+	latestRelease, err := getLatestGithubRelease("https://api.github.com/repos/GyanD/codexffmpeg/releases/latest")
+
+	// check for error
+	if err != nil {
+		logger.Errorf("Error getting latest ffmpeg release: %s\n", err.Error())
+		return false
+	}
+
+	// the zip file
+	asset := latestRelease.Assets[1]
+
+	// check if version file exists
+	if exists(versionFilePath) {
+		// read version from file
+		version, err := ioutil.ReadFile(versionFilePath)
+		// check for error
+		if err != nil {
+			logger.Errorf("Error reading ffmpeg version file: %s\n", err.Error())
+			return false
+		}
+
+		// compare version to latest release version
+		if strings.Compare(string(version), latestRelease.Tag_Name) == -1 {
+			logger.Warningf("FFMPEG is out of date, current version: " + string(version) + "; latest version: " + latestRelease.Tag_Name + "\n")
+			return handleBinaryUpdate("ffmpeg", latestRelease, asset, depFolder, versionFilePath)
+		} else {
+			// ffmpeg is up to date
+			logger.Info("FFMPEG is up to date")
+			return true
+		}
+	} else {
+		// version file does not exist
+		logger.Notice("FFMPEG version file does not exist")
+		return handleBinaryUpdate("ffmpeg", latestRelease, asset, depFolder, versionFilePath)
+	}
+}
+
+func checkAria2() bool {
+	depFolder := path.Join("bin", "aria2")
+
+	err := makeDirectoryIfNotExists(depFolder)
+	if err != nil {
+		logger.Fatalf("Error creating directory %s: %s", depFolder, err.Error())
+		return false
+	}
+
+	versionFilePath := path.Join(depFolder, "aria2.version")
+	latestRelease, err := getLatestGithubRelease("https://api.github.com/repos/aria2/aria2/releases/latest")
+
+	// check for error
+	if err != nil {
+		logger.Errorf("Error getting latest aria2 release: %s\n", err.Error())
+		return false
+	}
+
+	// the zip file for windows 64 bit
+	asset := latestRelease.Assets[2]
+
+	// check if version file exists
+	if exists(versionFilePath) {
+		// read version from file
+		currentVersion, err := ioutil.ReadFile(versionFilePath)
+		// check for error
+		if err != nil {
+			logger.Errorf("Error reading aria2 version file: %s\n", err.Error())
+			return false
+		}
+
+		// compare version to latest release version
+		if strings.Compare(string(currentVersion), latestRelease.Tag_Name) == -1 {
+			logger.Warningf("Aria2 is out of date, current version: " + string(currentVersion) + "; latest version: " + latestRelease.Tag_Name + "\n")
+			return handleBinaryUpdate("aria2", latestRelease, asset, depFolder, versionFilePath)
+		} else {
+			// aria2 is up to date
+			logger.Info("Aria2 is up to date")
+			return true
+		}
+	} else {
+		// version file does not exist
+		logger.Notice("Aria2 version file does not exist")
+		return handleBinaryUpdate("aria2", latestRelease, asset, depFolder, versionFilePath)
+	}
+}
+
+func main() {
+	logging.SetBackend(backendFormatter)
+
+	logger.Info("Checking dependencies...")
+	// bento4BinPath := path.Join("bin", "bento4") https://www.bok.net/Bento4/binaries/Bento4-SDK-1-6-0-639.x86_64-microsoft-win32.zip
+
+	ffmpegCheckStatus := checkFFMPEG()
+	aria2CheckStatus := checkAria2()
+
+	// TODO: Bento4
+	// https://www.bok.net/Bento4/binaries/Bento4-SDK-1-6-0-639.x86_64-microsoft-win32.zip
+	// https://api.github.com/repos/axiomatic-systems/Bento4/tags
+
+	if !ffmpegCheckStatus {
+		logger.Fatalf("FFMPEG check failed")
+		os.Exit(1)
+	}
+
+	if !aria2CheckStatus {
+		logger.Fatalf("Aria2 check failed")
+		os.Exit(1)
+	}
+
+	logger.Info("Dependencies are up to date")
+}
