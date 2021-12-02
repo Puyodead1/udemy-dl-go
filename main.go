@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,6 +20,7 @@ import (
 	"github.com/op/go-logging"
 )
 
+var version string = "DEVELOPMENT"
 var logger = logging.MustGetLogger("udemy-dl")
 var loggerBackend = logging.NewLogBackend(os.Stderr, "", 0)
 var loggerFormat = logging.MustStringFormatter(
@@ -733,6 +735,14 @@ func checkSystem() {
 
 func main() {
 	logging.SetBackend(backendFormatter)
+
+	versionPtr := flag.Bool("version", false, "Print version")
+	flag.Parse()
+
+	if *versionPtr {
+		logger.Infof("Running version: %s", version)
+		os.Exit(0)
+	}
 
 	logger.Info("Checking system...")
 	checkSystem()

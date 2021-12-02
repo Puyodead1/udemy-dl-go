@@ -47,7 +47,7 @@ jobs:
         go-version: 1.17
 
     - name: Build ${{ matrix.os }} ${{ matrix.arch }}
-      run: env GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o udemy-dl-go-${{ matrix.suffix }} -v ./...
+      run: env GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o udemy-dl-go-${{ matrix.suffix }} -v -ldflags "-X main.version=`date -u +%Y-%m-%d.%s-git-$(git rev-parse --short HEAD)`" ./...
 
     - uses: actions/upload-artifact@v2
       with:
