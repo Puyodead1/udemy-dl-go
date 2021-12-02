@@ -20,3 +20,8 @@ jobs:
 
     - name: Build
       run: go build -v ./...
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: udemy-dl-go.exe
+        path: ${{github.workspace}}/udemy-dl-go.exe
