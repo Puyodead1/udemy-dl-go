@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"runtime"
 	"strconv"
@@ -744,8 +745,12 @@ func main() {
 	if runtime.GOOS == "windows" {
 		ffmpegCheckStatus = checkFFMPEGWindows()
 	} else if runtime.GOOS == "linux" {
-		logger.Fatal("Please install FFMPEG using your system package manager: https://ffmpeg.org/download.html#build-linux")
-		os.Exit(1)
+		_, error := exec.LookPath("ffmpeg")
+		if error != nil {
+			logger.Fatal("Please install FFMPEG using your system package manager: https://ffmpeg.org/download.html#build-linux")
+			os.Exit(1)
+		}
+		ffmpegCheckStatus = true
 	} else if runtime.GOOS == "darwin" {
 		ffmpegCheckStatus = checkFFMPEGMac()
 	}
