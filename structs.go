@@ -29,3 +29,16 @@ type Release struct {
 	Published_At     string
 	Assets           []Asset
 }
+
+type TagCommit struct {
+	SHA string `json:"sha"`
+	URL string `json:"url"`
+}
+
+type Tag struct {
+	Name        string    `json:"name"`
+	Zipball_URL string    `json:"zipball_url"`
+	Tarball_URL string    `json:"tarball_url"`
+	Commit      TagCommit `json:"commit"`
+	Node_ID     string    `json:"node_id"`
+}

@@ -27,8 +27,37 @@ var backendFormatter = logging.NewBackendFormatter(loggerBackend, loggerFormat)
 
 var httpClient = &http.Client{Timeout: time.Second * 10}
 
-func getJson(url string) (Release, error) {
+func getReleaseJson(url string) (Release, error) {
 	target := Release{}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return target, err
+	}
+
+	res, getErr := httpClient.Do(req)
+	if getErr != nil {
+		return target, getErr
+	}
+
+	if res.Body != nil {
+		defer res.Body.Close()
+	}
+
+	body, readErr := ioutil.ReadAll(res.Body)
+	if readErr != nil {
+		return target, readErr
+	}
+
+	jsonErr := json.Unmarshal(body, &target)
+	if jsonErr != nil {
+		return target, jsonErr
+	}
+
+	return target, nil
+}
+
+func getTagJson(url string) ([]Tag, error) {
+	target := []Tag{}
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return target, err
@@ -183,7 +212,18 @@ func makeDirectoryIfNotExists(fpath string) error {
 
 func getLatestGithubRelease(url string) (Release, error) {
 	// get latest release
-	data, err1 := getJson(url)
+	data, err1 := getReleaseJson(url)
+
+	// check for error
+	if err1 != nil {
+		return data, err1
+	}
+	return data, nil
+}
+
+func getLatestGithubTag(url string) ([]Tag, error) {
+	// get latest release
+	data, err1 := getTagJson(url)
 
 	// check for error
 	if err1 != nil {
@@ -291,9 +331,12 @@ func handleBinaryUpdate(depName string, latestRelease Release, asset Asset, depF
 		}
 	}
 
-	logger.Debug("Removing temp folder")
+	basename := path.Base(archiveFilePath)
+	tmpFolderPath := path.Join(depFolder, strings.TrimSuffix(basename, path.Ext(basename)))
 
-	err1 := os.RemoveAll(files[0])
+	logger.Debugf("Removing temp folder: %s\n", tmpFolderPath)
+
+	err1 := os.RemoveAll(tmpFolderPath)
 	if err1 != nil {
 		logger.Errorf("Error removing temp folder: %s\n", err1.Error())
 		return false
@@ -304,6 +347,68 @@ func handleBinaryUpdate(depName string, latestRelease Release, asset Asset, depF
 	// check for error
 	if err2 != nil {
 		logger.Errorf("Error writing %s version file: %s\n", depName, err2.Error())
+		return false
+	}
+
+	return true
+}
+
+func handleBento4BinaryUpdate(depFolder string, versionFilePath string, downloadURL string, version string, tagName string) bool {
+	archiveFilePath := path.Join(depFolder, fmt.Sprintf("Bento4-SDK-%s.x86_64-microsoft-win32.zip", version))
+
+	// update binary
+	if !exists(archiveFilePath) {
+		logger.Debugf("Downloading bento4 to %s\n", archiveFilePath)
+
+		// download binary
+		err := DownloadFile(downloadURL, depFolder)
+		if err != nil {
+			logger.Errorf("Error downloading bento4: %s\n", err.Error())
+			return false
+		}
+	} else {
+		logger.Debugf("Found existing bento4 archive: %s\n", archiveFilePath)
+	}
+
+	logger.Debug("Unzipping bento4")
+
+	// unzip binary
+	files, err := unzip(archiveFilePath, depFolder)
+	if err != nil {
+		logger.Errorf("Error unzipping bento4 archive: %s\n", err.Error())
+		return false
+	}
+
+	logger.Info("Bento4 unzipped, Moving binaries")
+
+	// move executable files to bin folder
+	for _, v := range files {
+		if strings.HasSuffix(v, "mp4decrypt.exe") {
+			logger.Debugf("Moving executable file %s to %s\n", v, depFolder)
+			err := os.Rename(v, path.Join(depFolder, path.Base(v)))
+			if err != nil {
+				logger.Errorf("Error moving executable file %s to %s: %s\n", v, depFolder, err.Error())
+				return false
+			}
+		}
+	}
+
+	basename := path.Base(archiveFilePath)
+	tmpFolderPath := path.Join(depFolder, strings.TrimSuffix(basename, path.Ext(basename)))
+
+	logger.Debugf("Removing temp folder: %s\n", tmpFolderPath)
+
+	err1 := os.RemoveAll(tmpFolderPath)
+	if err1 != nil {
+		logger.Errorf("Error removing temp folder: %s\n", err1.Error())
+		return false
+	}
+
+	// write version to file
+	err2 := ioutil.WriteFile(versionFilePath, []byte(tagName), 0644)
+	// check for error
+	if err2 != nil {
+		logger.Errorf("Error writing bento4 version file: %s\n", err2.Error())
 		return false
 	}
 
@@ -404,18 +509,64 @@ func checkAria2() bool {
 	}
 }
 
+func checkBento4() bool {
+	depFolder := path.Join("bin", "bento4")
+
+	err := makeDirectoryIfNotExists(depFolder)
+	if err != nil {
+		logger.Fatalf("Error creating directory %s: %s", depFolder, err.Error())
+		return false
+	}
+
+	versionFilePath := path.Join(depFolder, "bento4.version")
+	tags, err := getLatestGithubTag("https://api.github.com/repos/axiomatic-systems/Bento4/tags")
+
+	latestTag := tags[0]
+
+	// check for error
+	if err != nil {
+		logger.Errorf("Error getting latest bento4 tag: %s\n", err.Error())
+		return false
+	}
+
+	versionString1 := strings.Split(latestTag.Name, "v")[1]
+	versionString2 := strings.ReplaceAll(versionString1, ".", "-")
+	downloadURL := fmt.Sprintf("https://www.bok.net/Bento4/binaries/Bento4-SDK-%s.x86_64-microsoft-win32.zip", versionString2)
+
+	// check if version file exists
+	if exists(versionFilePath) {
+		// read version from file
+		currentVersion, err := ioutil.ReadFile(versionFilePath)
+		// check for error
+		if err != nil {
+			logger.Errorf("Error reading bento4 version file: %s\n", err.Error())
+			return false
+		}
+
+		// compare version to latest release version
+		if strings.Compare(string(currentVersion), latestTag.Name) == -1 {
+			logger.Warningf("Bento4 is out of date, current version: " + string(currentVersion) + "; latest version: " + latestTag.Name + "\n")
+			return handleBento4BinaryUpdate(depFolder, versionFilePath, downloadURL, versionString2, latestTag.Name)
+		} else {
+			// Bento4 is up to date
+			logger.Info("Bento4 is up to date")
+			return true
+		}
+	} else {
+		// version file does not exist
+		logger.Notice("Bento4 version file does not exist")
+		return handleBento4BinaryUpdate(depFolder, versionFilePath, downloadURL, versionString2, latestTag.Name)
+	}
+}
+
 func main() {
 	logging.SetBackend(backendFormatter)
 
 	logger.Info("Checking dependencies...")
-	// bento4BinPath := path.Join("bin", "bento4") https://www.bok.net/Bento4/binaries/Bento4-SDK-1-6-0-639.x86_64-microsoft-win32.zip
 
 	ffmpegCheckStatus := checkFFMPEG()
 	aria2CheckStatus := checkAria2()
-
-	// TODO: Bento4
-	// https://www.bok.net/Bento4/binaries/Bento4-SDK-1-6-0-639.x86_64-microsoft-win32.zip
-	// https://api.github.com/repos/axiomatic-systems/Bento4/tags
+	bento4CheckStatus := checkBento4()
 
 	if !ffmpegCheckStatus {
 		logger.Fatalf("FFMPEG check failed")
@@ -424,6 +575,11 @@ func main() {
 
 	if !aria2CheckStatus {
 		logger.Fatalf("Aria2 check failed")
+		os.Exit(1)
+	}
+
+	if !bento4CheckStatus {
+		logger.Fatalf("Bento4 check failed")
 		os.Exit(1)
 	}
 
