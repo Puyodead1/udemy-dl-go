@@ -9,20 +9,6 @@ body:
     attributes:
       value: |
         Thanks for taking the time to fill out this bug report!
-  - type: textarea
-    id: what-happened
-    attributes:
-      label: What happened?
-      description: Describe with as much detail as you can exactly what happened
-    validations:
-      required: true
-  - type: textarea
-    id: expected-result
-    attributes:
-      label: Expected Result
-      description: What do you expect to happen if the bug didn't occur?
-    validations:
-      required: true
   - type: dropdown
     id: branch
     attributes:
@@ -43,6 +29,28 @@ body:
         - Linux/Unix
         - MacOS
         - Other (Enter Below)
+  - type: textarea
+    id: version
+    attributes:
+      label: Program Version
+      placeholder: "You can find this by running the program with just the -version argument: `udemy-dl-go -version`"
+      description: "Ex: 2023-02-22.1677092994-git-d6cd1e2"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe with as much detail as you can exactly what happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected-result
+    attributes:
+      label: Expected Result
+      description: What do you expect to happen if the bug didn't occur?
+    validations:
+      required: true
   - type: textarea
     id: logs
     attributes:
