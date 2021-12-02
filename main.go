@@ -782,4 +782,25 @@ func main() {
 		logger.Fatal("Bento4 check failed")
 		os.Exit(1)
 	}
+
+	a, error := exec.Command(path.Join("bin", "ffmpeg", "ffmpeg.exe"), "-version").CombinedOutput()
+	if error != nil {
+		panic(error)
+	}
+
+	logger.Debug(string(a) + "\n")
+
+	b, error1 := exec.Command(path.Join("bin", "aria2", "aria2c.exe"), "--version").CombinedOutput()
+	if error1 != nil {
+		panic(error)
+	}
+
+	logger.Debug(string(b) + "\n")
+
+	c, error2 := exec.Command(path.Join("bin", "bento4", "mp4decrypt.exe")).CombinedOutput()
+	if error2 != nil && error2.Error() != "exit status 1" { // hack for testing, mp4decrypt doesnt have a version argument and prints to stderr by default
+		panic(error)
+	}
+
+	logger.Debug(string(c) + "\n")
 }
