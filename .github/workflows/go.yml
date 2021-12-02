@@ -19,9 +19,11 @@ jobs:
         go-version: 1.17
 
     - name: Build
-      run: go build -v ${{github.workspace}}
+      run: |
+        go build -v ./...
+        ls -la
 
     - uses: actions/upload-artifact@v2
       with:
         name: udemy-dl-go.exe
-        path: ${{github.workspace}}/udemy-dl-go.exe
+        path: udemy-dl-go.exe
