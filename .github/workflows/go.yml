@@ -18,12 +18,26 @@ jobs:
       with:
         go-version: 1.17
 
-    - name: Build
-      run: |
-        go build -v ./...
-        ls -la
+    - name: Build Windows amd64
+      run: env GOOS=windows GOARCH=amd64 go build -o udemy-dl-go-win-amd64.exe -v ./...
 
     - uses: actions/upload-artifact@v2
       with:
-        name: udemy-dl-go.exe
-        path: udemy-dl-go.exe
+        name: udemy-dl-go-win-amd64.exe
+        path: udemy-dl-go-win-amd64.exe
+
+    - name: Build Windows 386
+      run: env GOOS=windows GOARCH=386 go build -o udemy-dl-go-win-386.exe -v ./...
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: udemy-dl-go-win-386.exe
+        path: udemy-dl-go-win-386.exe
+
+    - name: Build Linux amd64
+      run: env GOOS=linux GOARCH=amd64 go build -o udemy-dl-go-linux-amd64.exe -v ./...
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: udemy-dl-go-linux-amd64.exe
+        path: udemy-dl-go-linux-amd64.exe
