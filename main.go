@@ -1,8 +1,11 @@
 package main
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"bufio"
 	"bytes"
+	"compress/bzip2"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -266,6 +269,66 @@ func getLatestMacFFMPEGVersion(url string) (FFMPEGMacInfo, error) {
 	return data, nil
 }
 
+func unbzip(src string, dest string) ([]string, error) {
+
+	var filenames []string
+
+	f, err := os.OpenFile(src, 0, 0)
+	if err != nil {
+		return filenames, err
+	}
+	defer f.Close()
+
+	br := bufio.NewReader(f)
+	cr := bzip2.NewReader(br)
+	tarReader := tar.NewReader(cr)
+
+	for {
+		f, err := tarReader.Next()
+
+		if err == io.EOF {
+			break
+		}
+
+		// Store filename/path for returning and using later on
+		fpath := path.Join(dest, f.Name)
+
+		// Check for ZipSlip.
+		if !strings.HasPrefix(fpath, path.Clean(dest)) {
+			return filenames, fmt.Errorf("%s: illegal file path", dest)
+		}
+
+		filenames = append(filenames, fpath)
+
+		if f.FileInfo().IsDir() {
+			// Make Folder
+			os.MkdirAll(dest, os.ModePerm)
+			continue
+		}
+
+		// Make File
+		if err = os.MkdirAll(path.Dir(fpath), os.ModePerm); err != nil {
+			return filenames, err
+		}
+
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.FileInfo().Mode())
+		if err != nil {
+			return filenames, err
+		}
+
+		_, err = io.Copy(outFile, tarReader)
+
+		// Close the file without defer to close before next iteration of loop
+		outFile.Close()
+
+		if err != nil {
+			return filenames, err
+		}
+	}
+
+	return filenames, nil
+}
+
 /*
 * Source: https://golangcode.com/unzip-files-in-go/
  */
@@ -345,17 +408,23 @@ func handleBinaryUpdate(depName string, latestRelease Release, asset Asset, depF
 	logger.Debugf("Unzipping %s", depName)
 
 	// unzip binary
-	files, err := unzip(archiveFilePath, depFolder)
+	var files []string
+	var err error
+	if strings.HasSuffix(asset.Name, ".bz2") {
+		files, err = unbzip(archiveFilePath, depFolder)
+	} else {
+		files, err = unzip(archiveFilePath, depFolder)
+	}
 	if err != nil {
 		logger.Errorf("Error unzipping %s archive: %s\n", depName, err)
 		return false
 	}
 
-	logger.Infof("%s unzipped, Moving binaries", depName)
+	logger.Debugf("%s unzipped, Moving binaries", depName)
 
 	// move executable files to bin folder
 	for _, v := range files {
-		if strings.HasSuffix(v, "aria2c.exe") || strings.HasSuffix(v, "ffmpeg.exe") {
+		if strings.HasSuffix(v, "aria2c") || strings.HasSuffix(v, "ffmpeg") || strings.HasSuffix(v, "aria2c.exe") || strings.HasSuffix(v, "ffmpeg.exe") {
 			logger.Debugf("Moving executable file %s to %s\n", v, depFolder)
 			err := os.Rename(v, path.Join(depFolder, path.Base(v)))
 			if err != nil {
@@ -366,6 +435,7 @@ func handleBinaryUpdate(depName string, latestRelease Release, asset Asset, depF
 	}
 
 	basename := path.Base(archiveFilePath)
+	// FIXME: on macOS, the file extension is .tar.bz2 so only the .bz2 part is removed rendering an invalid folder path
 	tmpFolderPath := path.Join(depFolder, strings.TrimSuffix(basename, path.Ext(basename)))
 
 	logger.Debugf("Removing temp folder: %s\n", tmpFolderPath)
@@ -387,7 +457,7 @@ func handleBinaryUpdate(depName string, latestRelease Release, asset Asset, depF
 	return true
 }
 
-func handleMacFFMPEGBinaryUpdate(latestVersion FFMPEGMacInfo, depFolder string, versionFilePath string) bool {
+func handleDarwinFFMPEGBinaryUpdate(latestVersion FFMPEGMacInfo, depFolder string, versionFilePath string) bool {
 	downloadURL := latestVersion.Download.ZIP.URL
 	archiveFilePath := path.Join(depFolder, path.Base(downloadURL))
 
@@ -414,7 +484,7 @@ func handleMacFFMPEGBinaryUpdate(latestVersion FFMPEGMacInfo, depFolder string, 
 		return false
 	}
 
-	logger.Info("FFMPEG unzipped, Moving binaries")
+	logger.Debug("FFMPEG unzipped, Moving binaries")
 
 	// move executable files to bin folder
 	for _, v := range files {
@@ -479,7 +549,7 @@ func handleBento4BinaryUpdate(depFolder string, versionFilePath string, version 
 		logger.Debugf("Found existing bento4 archive: %s\n", archiveFilePath)
 	}
 
-	logger.Info("Unzipping bento4")
+	logger.Debug("Unzipping bento4")
 
 	// unzip binary
 	files, err := unzip(archiveFilePath, depFolder)
@@ -488,11 +558,11 @@ func handleBento4BinaryUpdate(depFolder string, versionFilePath string, version 
 		return false
 	}
 
-	logger.Info("Bento4 unzipped, Moving binaries")
+	logger.Debug("Bento4 unzipped, Moving binaries")
 
 	// move executable files to bin folder
 	for _, v := range files {
-		if strings.HasSuffix(v, "mp4decrypt.exe") {
+		if strings.HasSuffix(v, "mp4decrypt") || strings.HasSuffix(v, "mp4decrypt.exe") {
 			logger.Debugf("Moving executable file %s to %s\n", v, depFolder)
 			err := os.Rename(v, path.Join(depFolder, path.Base(v)))
 			if err != nil {
@@ -571,7 +641,7 @@ func checkFFMPEGWindows() bool {
 	}
 }
 
-func checkFFMPEGMac() bool {
+func checkFFMPEGDarwin() bool {
 	depFolder := path.Join("bin", "ffmpeg")
 
 	err := makeDirectoryIfNotExists(depFolder)
@@ -602,7 +672,7 @@ func checkFFMPEGMac() bool {
 		// compare version to latest release version
 		if strings.Compare(string(version), latestVersion.Version) == -1 {
 			logger.Warningf("FFMPEG is out of date, current version: " + string(version) + "; latest version: " + latestVersion.Version + "\n")
-			return handleMacFFMPEGBinaryUpdate(latestVersion, depFolder, versionFilePath)
+			return handleDarwinFFMPEGBinaryUpdate(latestVersion, depFolder, versionFilePath)
 		} else {
 			// ffmpeg is up to date
 			logger.Info("FFMPEG is up to date")
@@ -611,7 +681,7 @@ func checkFFMPEGMac() bool {
 	} else {
 		// version file does not exist
 		logger.Notice("FFMPEG version file does not exist")
-		return handleMacFFMPEGBinaryUpdate(latestVersion, depFolder, versionFilePath)
+		return handleDarwinFFMPEGBinaryUpdate(latestVersion, depFolder, versionFilePath)
 	}
 }
 
@@ -625,7 +695,14 @@ func checkAria2() bool {
 	}
 
 	versionFilePath := path.Join(depFolder, "aria2.version")
-	latestRelease, err := getLatestGithubRelease("https://api.github.com/repos/aria2/aria2/releases/latest")
+	var apiURL string
+	if runtime.GOOS != "darwin" {
+		apiURL = "https://api.github.com/repos/aria2/aria2/releases/latest"
+	} else {
+		// the latest release (1.36) doesn't contain any binaries for macOS
+		apiURL = "https://api.github.com/repos/aria2/aria2/releases/20496544"
+	}
+	latestRelease, err := getLatestGithubRelease(apiURL)
 
 	// check for error
 	if err != nil {
@@ -634,7 +711,18 @@ func checkAria2() bool {
 	}
 
 	// the zip file for windows 64 bit
-	asset := latestRelease.Assets[2]
+	var asset Asset
+	if runtime.GOOS == "windows" {
+		if runtime.GOARCH != "amd64" {
+			// the zip file for windows 32 bit
+			asset = latestRelease.Assets[1]
+		} else {
+			// the zip file for windows 64 bit
+			asset = latestRelease.Assets[2]
+		}
+	} else if runtime.GOOS == "darwin" {
+		asset = latestRelease.Assets[2]
+	}
 
 	// check if version file exists
 	if exists(versionFilePath) {
@@ -712,6 +800,7 @@ func checkBento4() bool {
 }
 
 func checkSystem() {
+	logger.Debugf("Detected %s architecture running %s\n", runtime.GOARCH, runtime.GOOS)
 	if runtime.GOOS == "windows" {
 		if runtime.GOARCH != "amd64" && runtime.GOARCH != "386" {
 			logger.Fatalf("Unsupported windows architecture: %s", runtime.GOARCH)
@@ -744,6 +833,15 @@ func main() {
 		os.Exit(0)
 	}
 
+	ffmpegExecutablePath := path.Join("bin", "ffmpeg", "ffmpeg")
+	aria2cExecutablePath := path.Join("bin", "aria2", "aria2c")
+	// since ffmpeg gets installed on linux via package manager (or another external method), we dont need a full path to the executable
+	if runtime.GOOS == "linux" {
+		ffmpegExecutablePath = "ffmpeg"
+	}
+
+	mp4decryptExecutablePath := path.Join("bin", "bento4", "mp4decrypt")
+
 	logger.Info("Checking system...")
 	checkSystem()
 	logger.Info("System check passed")
@@ -762,10 +860,20 @@ func main() {
 		}
 		ffmpegCheckStatus = true
 	} else if runtime.GOOS == "darwin" {
-		ffmpegCheckStatus = checkFFMPEGMac()
+		ffmpegCheckStatus = checkFFMPEGDarwin()
 	}
 
-	aria2CheckStatus := checkAria2()
+	var aria2CheckStatus bool
+	if runtime.GOOS != "linux" {
+		aria2CheckStatus = checkAria2()
+	} else if runtime.GOOS == "linux" {
+		_, error := exec.LookPath("aria2c")
+		if error != nil {
+			logger.Fatal("Please install aria2 using your system package manager: https://aria2.github.io/")
+			os.Exit(1)
+		}
+		aria2CheckStatus = true
+	}
 	bento4CheckStatus := checkBento4()
 
 	if !ffmpegCheckStatus {
@@ -783,21 +891,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	a, error := exec.Command(path.Join("bin", "ffmpeg", "ffmpeg.exe"), "-version").CombinedOutput()
+	a, error := exec.Command(ffmpegExecutablePath, "-version").CombinedOutput()
 	if error != nil {
 		panic(error)
 	}
 
 	logger.Debug(string(a) + "\n")
 
-	b, error1 := exec.Command(path.Join("bin", "aria2", "aria2c.exe"), "--version").CombinedOutput()
+	b, error1 := exec.Command(aria2cExecutablePath, "--version").CombinedOutput()
 	if error1 != nil {
 		panic(error)
 	}
 
 	logger.Debug(string(b) + "\n")
 
-	c, error2 := exec.Command(path.Join("bin", "bento4", "mp4decrypt.exe")).CombinedOutput()
+	c, error2 := exec.Command(mp4decryptExecutablePath).CombinedOutput()
 	if error2 != nil && error2.Error() != "exit status 1" { // hack for testing, mp4decrypt doesnt have a version argument and prints to stderr by default
 		panic(error)
 	}
