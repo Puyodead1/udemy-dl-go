@@ -401,8 +401,6 @@ func HandleBinaryUpdate(depName string, latestRelease Release, asset Asset, depF
 
 	logger.Debugf("%s unzipped, Moving binaries", depName)
 
-	fmt.Println(files)
-
 	// move executable files to bin folder
 	for _, v := range files {
 		if strings.HasSuffix(v, "bin/aria2c") || strings.HasSuffix(v, "ffmpeg") || strings.HasSuffix(v, "aria2c.exe") || strings.HasSuffix(v, "ffmpeg.exe") {
@@ -468,7 +466,7 @@ func HandleDarwinFFMPEGBinaryUpdate(latestVersion FFMPEGMacInfo, depFolder strin
 
 	// move executable files to bin folder
 	for _, v := range files {
-		if strings.HasSuffix(v, ".exe") {
+		if strings.HasSuffix(v, "ffmpeg") {
 			logger.Debugf("Moving executable file %s to %s\n", v, depFolder)
 			err := os.Rename(v, path.Join(depFolder, path.Base(v)))
 			if err != nil {
