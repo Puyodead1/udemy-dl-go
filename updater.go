@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-var HttpClient = &http.Client{Timeout: time.Second * 10}
+var UpdaterClient = &http.Client{Timeout: time.Second * 10}
 
 func GetReleaseJson(url string) (Release, error) {
 	target := Release{}
@@ -30,7 +30,11 @@ func GetReleaseJson(url string) (Release, error) {
 
 	}
 
-	res, getErr := HttpClient.Do(req)
+	if GITHUB_TOKEN != "" {
+		req.Header.Add("Authentication", fmt.Sprintf("token %s", GITHUB_TOKEN))
+	}
+
+	res, getErr := UpdaterClient.Do(req)
 	if getErr != nil {
 		return target, getErr
 	}
@@ -40,6 +44,11 @@ func GetReleaseJson(url string) (Release, error) {
 	}
 
 	body, readErr := ioutil.ReadAll(res.Body)
+
+	if res.StatusCode != 200 {
+		return target, fmt.Errorf("%s: %s", res.Status, body)
+	}
+
 	if readErr != nil {
 		return target, readErr
 	}
@@ -59,7 +68,11 @@ func GetTagJson(url string) ([]Tag, error) {
 		return target, err
 	}
 
-	res, getErr := HttpClient.Do(req)
+	if GITHUB_TOKEN != "" {
+		req.Header.Add("Authentication", fmt.Sprintf("token %s", GITHUB_TOKEN))
+	}
+
+	res, getErr := UpdaterClient.Do(req)
 	if getErr != nil {
 		return target, getErr
 	}
@@ -69,6 +82,11 @@ func GetTagJson(url string) ([]Tag, error) {
 	}
 
 	body, readErr := ioutil.ReadAll(res.Body)
+
+	if res.StatusCode != 200 {
+		return target, fmt.Errorf("%s: %s", res.Status, body)
+	}
+
 	if readErr != nil {
 		return target, readErr
 	}
@@ -88,7 +106,7 @@ func GetMacFFFMPEGInfo(url string) (FFMPEGMacInfo, error) {
 		return target, err
 	}
 
-	res, getErr := HttpClient.Do(req)
+	res, getErr := UpdaterClient.Do(req)
 	if getErr != nil {
 		return target, getErr
 	}
@@ -386,42 +404,44 @@ func HandleBinaryUpdate(depName string, latestRelease Release, asset Asset, depF
 
 	logger.Debugf("Unzipping %s", depName)
 
-	// unzip binary
-	var files []string
-	var err error
-	if strings.HasSuffix(asset.Name, ".bz2") {
-		files, err = DecompressBZIP(archiveFilePath, depFolder)
-	} else {
-		files, err = Unzip(archiveFilePath, depFolder)
-	}
-	if err != nil {
-		logger.Errorf("Error unzipping %s archive: %s\n", depName, err)
-		return false
-	}
+	if depName != "ytdlp" {
+		// unzip binary
+		var files []string
+		var err error
+		if strings.HasSuffix(asset.Name, ".bz2") {
+			files, err = DecompressBZIP(archiveFilePath, depFolder)
+		} else {
+			files, err = Unzip(archiveFilePath, depFolder)
+		}
+		if err != nil {
+			logger.Errorf("Error unzipping %s archive: %s\n", depName, err)
+			return false
+		}
 
-	logger.Debugf("%s unzipped, Moving binaries", depName)
+		logger.Debugf("%s unzipped, Moving binaries", depName)
 
-	// move executable files to bin folder
-	for _, v := range files {
-		if strings.HasSuffix(v, "bin/aria2c") || strings.HasSuffix(v, "ffmpeg") || strings.HasSuffix(v, "aria2c.exe") || strings.HasSuffix(v, "ffmpeg.exe") {
-			logger.Debugf("Moving executable file %s to %s\n", v, depFolder)
-			err := os.Rename(v, path.Join(depFolder, path.Base(v)))
-			if err != nil {
-				logger.Errorf("Error moving executable file %s to %s: %s\n", v, depFolder, err)
-				return false
+		// move executable files to bin folder
+		for _, v := range files {
+			if strings.HasSuffix(v, "bin/aria2c") || strings.HasSuffix(v, "ffmpeg") || strings.HasSuffix(v, "aria2c.exe") || strings.HasSuffix(v, "ffmpeg.exe") {
+				logger.Debugf("Moving executable file %s to %s\n", v, depFolder)
+				err := os.Rename(v, path.Join(depFolder, path.Base(v)))
+				if err != nil {
+					logger.Errorf("Error moving executable file %s to %s: %s\n", v, depFolder, err)
+					return false
+				}
 			}
 		}
-	}
 
-	// basename := path.Base(archiveFilePath)
-	tmpFolderPath := files[0]
+		// basename := path.Base(archiveFilePath)
+		tmpFolderPath := files[0]
 
-	logger.Debugf("Removing temp folder: %s\n", tmpFolderPath)
+		logger.Debugf("Removing temp folder: %s\n", tmpFolderPath)
 
-	err1 := os.RemoveAll(tmpFolderPath)
-	if err1 != nil {
-		logger.Errorf("Error removing temp folder: %s\n", err1)
-		return false
+		err1 := os.RemoveAll(tmpFolderPath)
+		if err1 != nil {
+			logger.Errorf("Error removing temp folder: %s\n", err1)
+			return false
+		}
 	}
 
 	// write version to file
@@ -581,7 +601,7 @@ func CheckFFMPEGWindows() bool {
 		return false
 	}
 
-	versionFilePath := path.Join(depFolder, "ffmpeg.version")
+	versionFilePath := path.Join(depFolder, ".version")
 	latestRelease, err := GetLatestGithubRelease("https://api.github.com/repos/GyanD/codexffmpeg/releases/latest")
 
 	// check for error
@@ -628,7 +648,7 @@ func CheckFFMPEGDarwin() bool {
 		return false
 	}
 
-	versionFilePath := path.Join(depFolder, "ffmpeg.version")
+	versionFilePath := path.Join(depFolder, ".version")
 	latestVersion, err := GetLatestMacFFMPEGVersion("https://evermeet.cx/ffmpeg/info/ffmpeg/snapshot")
 
 	// check for error
@@ -672,7 +692,7 @@ func CheckAria2() bool {
 		return false
 	}
 
-	versionFilePath := path.Join(depFolder, "aria2.version")
+	versionFilePath := path.Join(depFolder, ".version")
 	var apiURL string
 	if runtime.GOOS != "darwin" {
 		apiURL = "https://api.github.com/repos/aria2/aria2/releases/latest"
@@ -728,6 +748,60 @@ func CheckAria2() bool {
 	}
 }
 
+func CheckYtdlp() bool {
+	depFolder := path.Join("bin", "ytdlp")
+
+	err := MakeDirectoryIfNotExists(depFolder)
+	if err != nil {
+		logger.Fatalf("Error creating directory %s: %s", depFolder, err)
+		return false
+	}
+
+	versionFilePath := path.Join(depFolder, ".version")
+	latestRelease, err := GetLatestGithubRelease("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest")
+
+	// check for error
+	if err != nil {
+		logger.Errorf("Error getting latest yt-dlp release: %s\n", err)
+		return false
+	}
+
+	// the zip file for windows 64 bit
+	var asset Asset
+	if runtime.GOOS == "linux" {
+		asset = latestRelease.Assets[2]
+	} else if runtime.GOOS == "windows" {
+		asset = latestRelease.Assets[3]
+	} else if runtime.GOOS == "darwin" {
+		asset = latestRelease.Assets[5]
+	}
+
+	// check if version file exists
+	if Exists(versionFilePath) {
+		// read version from file
+		currentVersion, err := ioutil.ReadFile(versionFilePath)
+		// check for error
+		if err != nil {
+			logger.Errorf("Error reading yt-dlp version file: %s\n", err)
+			return false
+		}
+
+		// compare version to latest release version
+		if strings.Compare(string(currentVersion), latestRelease.TagName) == -1 {
+			logger.Warningf("yt-dlp is out of date, current version: " + string(currentVersion) + "; latest version: " + latestRelease.TagName + "\n")
+			return HandleBinaryUpdate("yt-dlp", latestRelease, asset, depFolder, versionFilePath)
+		} else {
+			// ytdlp is up to date
+			logger.Info("yt-dlp is up to date")
+			return true
+		}
+	} else {
+		// version file does not exist
+		logger.Notice("yt-dlp version file does not exist")
+		return HandleBinaryUpdate("ytdlp", latestRelease, asset, depFolder, versionFilePath)
+	}
+}
+
 func CheckBento4() bool {
 	depFolder := path.Join("bin", "bento4")
 
@@ -737,16 +811,16 @@ func CheckBento4() bool {
 		return false
 	}
 
-	versionFilePath := path.Join(depFolder, "bento4.version")
+	versionFilePath := path.Join(depFolder, ".version")
 	tags, err := GetLatestGithubTag("https://api.github.com/repos/axiomatic-systems/Bento4/tags")
-
-	latestTag := tags[0]
 
 	// check for error
 	if err != nil {
 		logger.Errorf("Error getting latest bento4 tag: %s\n", err)
 		return false
 	}
+
+	latestTag := tags[0]
 
 	versionString1 := strings.Split(latestTag.Name, "v")[1]
 	versionString2 := strings.ReplaceAll(versionString1, ".", "-")
@@ -778,8 +852,27 @@ func CheckBento4() bool {
 }
 
 func Updater() {
+	var aria2CheckStatus bool
+	var bento4CheckStatus bool
 	var ffmpegCheckStatus bool
+	var ytdlpCheckStatus bool
 
+	// aria2
+	if runtime.GOOS != "linux" {
+		aria2CheckStatus = CheckAria2()
+	} else if runtime.GOOS == "linux" {
+		_, error := exec.LookPath("aria2c")
+		if error != nil {
+			logger.Fatal("Please install aria2 using your system package manager: https://aria2.github.io/")
+			os.Exit(1)
+		}
+		aria2CheckStatus = true
+	}
+
+	// bento4
+	bento4CheckStatus = CheckBento4()
+
+	// ffmpeg
 	if runtime.GOOS == "windows" {
 		ffmpegCheckStatus = CheckFFMPEGWindows()
 	} else if runtime.GOOS == "linux" {
@@ -793,23 +886,8 @@ func Updater() {
 		ffmpegCheckStatus = CheckFFMPEGDarwin()
 	}
 
-	var aria2CheckStatus bool
-	if runtime.GOOS != "linux" {
-		aria2CheckStatus = CheckAria2()
-	} else if runtime.GOOS == "linux" {
-		_, error := exec.LookPath("aria2c")
-		if error != nil {
-			logger.Fatal("Please install aria2 using your system package manager: https://aria2.github.io/")
-			os.Exit(1)
-		}
-		aria2CheckStatus = true
-	}
-	bento4CheckStatus := CheckBento4()
-
-	if !ffmpegCheckStatus {
-		logger.Fatal("FFMPEG check failed")
-		os.Exit(1)
-	}
+	// ytdlp
+	ytdlpCheckStatus = CheckYtdlp()
 
 	if !aria2CheckStatus {
 		logger.Fatal("Aria2 check failed")
@@ -818,6 +896,16 @@ func Updater() {
 
 	if !bento4CheckStatus {
 		logger.Fatal("Bento4 check failed")
+		os.Exit(1)
+	}
+
+	if !ffmpegCheckStatus {
+		logger.Fatal("FFMPEG check failed")
+		os.Exit(1)
+	}
+
+	if !ytdlpCheckStatus {
+		logger.Fatal("yt-dlp check failed")
 		os.Exit(1)
 	}
 }
