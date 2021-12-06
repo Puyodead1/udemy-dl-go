@@ -78,14 +78,31 @@ func main() {
 		GITHUB_TOKEN = *githubTokenPtr
 	}
 
-	// since ffmpeg gets installed on linux via package manager (or another external method), we dont need a full path to the executable
+	if GITHUB_TOKEN != "" {
+		logger.Notice("GitHub token found in environment or command line, using GitHub authentication")
+	}
+
+	// ffmpeg and aria2c are installed externally, so we need to check if they are installed
 	if runtime.GOOS == "linux" {
-		ffmpegExecutablePath = "ffmpeg"
+		aria2cPath, e1 := LocateBinary("aria2c")
+		ffmpegPath, e2 := LocateBinary("ffmpeg")
+
+		if e1 != nil {
+			logger.Fatal("Please install aria2 using your system package manager: https://aria2.github.io/")
+			os.Exit(1)
+		}
+		aria2cExecutablePath = aria2cPath
+
+		if e2 != nil {
+			logger.Fatal("Please install FFMPEG using your system package manager: https://ffmpeg.org/download.html#build-linux")
+			os.Exit(1)
+		}
+		ffmpegExecutablePath = ffmpegPath
 	}
 
 	logger.Info("Checking system...")
 	checkSystem()
-	logger.Info("System check passed")
+	logger.Notice("System check passed")
 
 	if !*skipUpdatePtr {
 		logger.Info("Checking dependencies...")

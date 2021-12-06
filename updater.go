@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"runtime"
 	"strconv"
@@ -402,9 +401,9 @@ func HandleBinaryUpdate(depName string, latestRelease Release, asset Asset, depF
 		logger.Debugf("Found existing %s archive: %s\n", depName, archiveFilePath)
 	}
 
-	logger.Debugf("Unzipping %s", depName)
-
 	if depName != "ytdlp" {
+		logger.Debugf("Unzipping %s", depName)
+
 		// unzip binary
 		var files []string
 		var err error
@@ -629,7 +628,7 @@ func CheckFFMPEGWindows() bool {
 			return HandleBinaryUpdate("ffmpeg", latestRelease, asset, depFolder, versionFilePath)
 		} else {
 			// ffmpeg is up to date
-			logger.Info("FFMPEG is up to date")
+			logger.Notice("FFMPEG is up to date")
 			return true
 		}
 	} else {
@@ -673,7 +672,7 @@ func CheckFFMPEGDarwin() bool {
 			return HandleDarwinFFMPEGBinaryUpdate(latestVersion, depFolder, versionFilePath)
 		} else {
 			// ffmpeg is up to date
-			logger.Info("FFMPEG is up to date")
+			logger.Notice("FFMPEG is up to date")
 			return true
 		}
 	} else {
@@ -738,7 +737,7 @@ func CheckAria2() bool {
 			return HandleBinaryUpdate("aria2", latestRelease, asset, depFolder, versionFilePath)
 		} else {
 			// aria2 is up to date
-			logger.Info("Aria2 is up to date")
+			logger.Notice("Aria2 is up to date")
 			return true
 		}
 	} else {
@@ -792,7 +791,7 @@ func CheckYtdlp() bool {
 			return HandleBinaryUpdate("yt-dlp", latestRelease, asset, depFolder, versionFilePath)
 		} else {
 			// ytdlp is up to date
-			logger.Info("yt-dlp is up to date")
+			logger.Notice("yt-dlp is up to date")
 			return true
 		}
 	} else {
@@ -841,7 +840,7 @@ func CheckBento4() bool {
 			return HandleBento4BinaryUpdate(depFolder, versionFilePath, versionString2, latestTag.Name)
 		} else {
 			// Bento4 is up to date
-			logger.Info("Bento4 is up to date")
+			logger.Notice("Bento4 is up to date")
 			return true
 		}
 	} else {
@@ -860,12 +859,8 @@ func Updater() {
 	// aria2
 	if runtime.GOOS != "linux" {
 		aria2CheckStatus = CheckAria2()
-	} else if runtime.GOOS == "linux" {
-		_, error := exec.LookPath("aria2c")
-		if error != nil {
-			logger.Fatal("Please install aria2 using your system package manager: https://aria2.github.io/")
-			os.Exit(1)
-		}
+	} else {
+		// This is handled in main.go since its installed externally, if we got here it means it was found
 		aria2CheckStatus = true
 	}
 
@@ -875,15 +870,11 @@ func Updater() {
 	// ffmpeg
 	if runtime.GOOS == "windows" {
 		ffmpegCheckStatus = CheckFFMPEGWindows()
-	} else if runtime.GOOS == "linux" {
-		_, error := exec.LookPath("ffmpeg")
-		if error != nil {
-			logger.Fatal("Please install FFMPEG using your system package manager: https://ffmpeg.org/download.html#build-linux")
-			os.Exit(1)
-		}
-		ffmpegCheckStatus = true
 	} else if runtime.GOOS == "darwin" {
 		ffmpegCheckStatus = CheckFFMPEGDarwin()
+	} else if runtime.GOOS == "linux" {
+		// This is handled in main.go since its installed externally, if we got here it means it was found
+		ffmpegCheckStatus = true
 	}
 
 	// ytdlp

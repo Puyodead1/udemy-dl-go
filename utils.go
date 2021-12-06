@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"os"
+	"os/exec"
 	"regexp"
 )
 
@@ -77,4 +78,13 @@ func ExtractCourseNameAndPortal(url string) (*string, *string) {
 		return &portal, &course
 	}
 	return nil, nil
+}
+
+func LocateBinary(name string) (string, error) {
+	fpath, error := exec.LookPath(name)
+	if error != nil {
+		return "", error
+	}
+
+	return fpath, nil
 }

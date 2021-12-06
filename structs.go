@@ -1,33 +1,33 @@
 package main
 
 type Asset struct {
-	URL                  string
-	ID                   int
-	NodeID               string
-	Name                 string
-	ContentType          string
-	State                string
-	Size                 int
-	DownloadCount        int
-	CreatedAt            string
-	UpdatedAt            string
-	Browser_Download_URL string
+	URL                  string `json:"url"`
+	ID                   int    `json:"id"`
+	NodeID               string `json:"node_id"`
+	Name                 string `json:"name"`
+	ContentType          string `json:"content_type"`
+	State                string `json:"state"`
+	Size                 int    `json:"size"`
+	DownloadCount        int    `json:"download_count"`
+	CreatedAt            string `json:"created_at"`
+	UpdatedAt            string `json:"updated_at"`
+	Browser_Download_URL string `json:"browser_download_url"`
 }
 
 type Release struct {
-	URL             string
-	AssetsURL       string
-	HTMLURL         string
-	ID              int
-	NodeID          string
-	TagName         string
-	TargetCommitish string
-	Name            string
-	Draft           bool
-	Prerelease      bool
-	Created_At      string
-	Published_At    string
-	Assets          []Asset
+	URL             string  `json:"url"`
+	AssetsURL       string  `json:"assets_url"`
+	HTMLURL         string  `json:"html_url"`
+	ID              int     `json:"id"`
+	NodeID          string  `json:"node_id"`
+	TagName         string  `json:"tag_name"`
+	TargetCommitish string  `json:"target_commitish"`
+	Name            string  `json:"name"`
+	Draft           bool    `json:"draft"`
+	Prerelease      bool    `json:"prerelease"`
+	Created_At      string  `json:"created_at"`
+	Published_At    string  `json:"published_at"`
+	Assets          []Asset `json:"assets"`
 }
 
 type TagCommit struct {
