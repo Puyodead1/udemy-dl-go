@@ -151,7 +151,13 @@ func main() {
 
 	logger.Infof("Course: %s", *courseName)
 
-	// TODO: login
-	// login()
 	// TODO: get course information
+	// TODO: load from file argument
+	// TODO: save to file argument
+	// TODO: loading course information from file
+	// TODO: save course information to file
+	// TODO: get course content
+	// TODO: process course content (this should be 'on the fly', so instead of pre-processing, just start downloading and fetch information for the lectures as we go)
+	// TODO: info argument
+	// TODO: mkv support
 }
