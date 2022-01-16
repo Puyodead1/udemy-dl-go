@@ -2,12 +2,16 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/op/go-logging"
 )
 
@@ -21,32 +25,38 @@ var backendFormatter = logging.NewBackendFormatter(loggerBackend, loggerFormat)
 
 var ffmpegExecutablePath = path.Join("bin", "ffmpeg", "ffmpeg")
 var aria2cExecutablePath = path.Join("bin", "aria2", "aria2c")
-var mp4decryptExecutablePath = path.Join("bin", "bento4", "mp4decrypt")
+
+var shakaPackageExecutablePath = path.Join("bin", "shaka-packager", "shaka-packager")
 var ytdlpExecutablePath = path.Join("bin", "ytdlp", "yt-dlp")
 
 var GITHUB_TOKEN = os.Getenv("GITHUB_TOKEN")
 
-func checkSystem() {
-	logger.Debugf("Detected %s architecture running %s\n", runtime.GOARCH, runtime.GOOS)
-	if runtime.GOOS == "windows" {
-		if runtime.GOARCH != "amd64" && runtime.GOARCH != "386" {
-			logger.Fatalf("Unsupported windows architecture: %s", runtime.GOARCH)
-			os.Exit(1)
-		}
-	} else if runtime.GOOS == "linux" {
-		if runtime.GOARCH != "amd64" && runtime.GOARCH != "386" && runtime.GOARCH != "arm" && runtime.GOARCH != "arm64" {
-			logger.Fatalf("Unsupported linux architecture: %s", runtime.GOARCH)
-			os.Exit(1)
-		}
-	} else if runtime.GOOS == "darwin" {
-		if runtime.GOARCH != "amd64" {
-			logger.Fatalf("Unsupported darwin architecture: %s", runtime.GOARCH)
-			os.Exit(1)
-		}
-	} else {
-		logger.Fatalf("Unsupported operating system: %s", runtime.GOOS)
-		os.Exit(1)
+var UdemyHTTPClient = &http.Client{Timeout: time.Second * 10, Transport: &transport{underlyingTransport: http.DefaultTransport}}
+
+func login() {
+	res, err := UdemyHTTPClient.Get(LOGIN_URL)
+	if err != nil {
+		logger.Fatalf("Unable to get login page: %s", err)
 	}
+
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		data, _ := ioutil.ReadAll(res.Body)
+		logger.Debug(string(data))
+		logger.Fatalf("Login page returned status code %d", res.StatusCode)
+	}
+
+	// load the html
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		logger.Fatalf("Unable to parse login page: %s", err)
+	}
+
+	// find csrf token
+	doc.Find("input[name='csrfmiddlewaretoken']").Each(func(i int, s *goquery.Selection) {
+		value := s.Text()
+		logger.Debug("Found csrf token: %s", value)
+	})
 }
 
 func main() {
@@ -116,10 +126,9 @@ func main() {
 		panic(aria2Error)
 	}
 
-	_, mp4decryptError := exec.Command(mp4decryptExecutablePath).CombinedOutput()
-	// hack to check if mp4decrypt is installed, mp4decrypt prints to stderr by default
-	if mp4decryptError != nil && !strings.Contains(mp4decryptError.Error(), "exit status") {
-		panic(mp4decryptError)
+	_, shakaError := exec.Command(shakaPackageExecutablePath, "-version").CombinedOutput()
+	if shakaError != nil {
+		panic(shakaError)
 	}
 
 	_, ffmpegError := exec.Command(ffmpegExecutablePath, "-version").CombinedOutput()
@@ -128,6 +137,7 @@ func main() {
 	}
 
 	_, ytdlpError := exec.Command(ytdlpExecutablePath, "-v").CombinedOutput()
+
 	// hack to check if yt-dlp is installed, yt-dlp prints to stderr by default
 	if ytdlpError != nil && !strings.Contains(ytdlpError.Error(), "exit status") {
 		panic(ytdlpError)
@@ -141,5 +151,7 @@ func main() {
 
 	logger.Infof("Course: %s", *courseName)
 
+	// TODO: login
+	// login()
 	// TODO: get course information
 }
