@@ -12,23 +12,18 @@ jobs:
         include:
           - os: windows
             arch: amd64
-            suffix: win-amd64.exe
             uploadname: win-amd64
           - os: linux
             arch: amd64
-            suffix: linux-amd64
             uploadname: linux-amd64
           - os: linux
             arch: arm64
-            suffix: linux-arm64
             uploadname: linux-arm64
           - os: linux
             arch: arm
-            suffix: linux-arm
             uploadname: linux-arm
           - os: darwin
             arch: amd64
-            suffix: darwin-amd64
             uploadname: darwin-amd64
 
     steps:
@@ -38,8 +33,8 @@ jobs:
       with:
         go-version: 1.18
     - name: Build ${{ matrix.os }} ${{ matrix.arch }}
-      run: env GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o udemy-dl-go-${{ matrix.suffix }} -v -ldflags "-X main.version=`date -u +%Y-%m-%d.%s-git-$(git rev-parse --short HEAD)`" ./...
+      run: env GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o udemy-dl-go -v -ldflags "-X main.version=`date -u +%Y-%m-%d.%s-git-$(git rev-parse --short HEAD)`" ./...
     - uses: actions/upload-artifact@v2
       with:
         name: ${{ matrix.uploadname }}
-        path: udemy-dl-go-${{ matrix.suffix }}
+        path: udemy-dl-go
