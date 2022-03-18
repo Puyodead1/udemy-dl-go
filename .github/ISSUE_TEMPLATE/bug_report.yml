@@ -15,7 +15,7 @@ body:
       label: Branch
       description: What branch are you using?
       options:
-        - "master/main"
+        - "main"
         - Other (Enter below)
     validations:
       required: true
@@ -56,7 +56,7 @@ body:
     attributes:
       label: Relevant log output
       description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks. Remember to censor sensitive information before submitting!
-      render: shell
+      render: Shell
   - type: textarea
     id: other-information
     attributes:

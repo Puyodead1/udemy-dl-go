@@ -1,13 +1,9 @@
 name: Go
-
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  - push
+  - pull_request
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
     strategy:
@@ -16,39 +12,27 @@ jobs:
           - os: windows
             arch: amd64
             suffix: win-amd64.exe
-          - os: windows
-            arch: 386
-            suffix: win32.exe
           - os: linux
             arch: amd64
             suffix: linux-amd64
           - os: linux
-            arch: 386
-            suffix: linux-386
+            arch: arm64
+            suffix: linux-arm64
           - os: linux
             arch: arm
             suffix: linux-arm
-          - os: linux
-            arch: arm64
-            suffix: linux-arm64
           - os: darwin
             arch: amd64
             suffix: darwin-amd64
-          # - os: darwin
-          #   arch: arm64
-          #   suffix: darwin-arm64
 
     steps:
     - uses: actions/checkout@v2
-
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.17
-
+        go-version: 1.18
     - name: Build ${{ matrix.os }} ${{ matrix.arch }}
       run: env GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o udemy-dl-go-${{ matrix.suffix }} -v -ldflags "-X main.version=`date -u +%Y-%m-%d.%s-git-$(git rev-parse --short HEAD)`" ./...
-
     - uses: actions/upload-artifact@v2
       with:
         name: udemy-dl-go-${{ matrix.suffix }}
