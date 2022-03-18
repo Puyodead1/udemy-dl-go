@@ -33,7 +33,7 @@ jobs:
       with:
         go-version: 1.18
     - name: Build ${{ matrix.os }} ${{ matrix.arch }}
-      run: env GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o udemy-dl-go -v -ldflags "-X main.version=`date -u +%Y-%m-%d.%s-git-$(git rev-parse --short HEAD)`" ./...
+      run: env GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o udemy-dl-go -v -ldflags "-X main.version=`date -u +%Y-%m-%d-git-$(git rev-parse --short HEAD)`" ./...
     - uses: actions/upload-artifact@v2
       with:
         name: ${{ matrix.uploadname }}
