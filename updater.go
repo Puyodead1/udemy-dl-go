@@ -6,12 +6,12 @@ import (
 )
 
 func FFMPEGCheck() (bool, error) {
-	logger.Info("Checking FFMPEG...")
+	Info("Checking FFMPEG...")
 
 	// check if ffmpeg is installed externally
 	exists := CommandExists("ffmpeg")
 	if exists {
-		logger.Info("FFMPEG appears to be installed already, probably via a package manager.")
+		Success("FFMPEG appears to be installed already, probably via a package manager.")
 		return true, nil
 	}
 
@@ -43,7 +43,7 @@ func FFMPEGCheck() (bool, error) {
 		// compare versions
 		if IsOutdated(currentVersion, latestVersion) {
 			// outdated
-			logger.Warningf("FFMPEG is outdated, current version: %s, latest version: %s", currentVersion, latestVersion)
+			Warningf("FFMPEG is outdated, current version: %s, latest version: %s", currentVersion, latestVersion)
 			// remove old directory
 			err = os.RemoveAll(FFMPEG_BIN_DIRECTORY)
 			if err != nil {
@@ -61,11 +61,11 @@ func FFMPEGCheck() (bool, error) {
 			}
 		} else {
 			// up to date
-			logger.Infof("FFMPEG is up to date, current version: %s, latest version: %s", currentVersion, latestVersion)
+			Successf("FFMPEG is up to date, current version: %s, latest version: %s", currentVersion, latestVersion)
 		}
 	} else {
 		// no existing install
-		logger.Info("FFMPEG not found, downloading...")
+		Warning("FFMPEG not found, downloading...")
 		err = DownloadFFMPEG(latestVersion, FFMPEG_BIN_DIRECTORY)
 		if err != nil {
 			return false, err
@@ -78,7 +78,7 @@ func FFMPEGCheck() (bool, error) {
 func GetLatestShakaPackagerVersion() (string, int64, error) {
 	release, err := GetLatestRelease("shaka-project", "shaka-packager")
 	if err != nil {
-		// logger.Errorf("Error getting latest shaka release: %s", err)
+		// Errorf("Error getting latest shaka release: %s", err)
 		return "", -1, err
 	}
 
@@ -88,18 +88,18 @@ func GetLatestShakaPackagerVersion() (string, int64, error) {
 func ShakaPackager() (bool, error) {
 	// versionString, versionID, err := GetLatestShakaPackagerVersion()
 	// if err != nil {
-	// 	// logger.Errorf("Error getting latest shaka release: %s", err)
+	// 	// Errorf("Error getting latest shaka release: %s", err)
 	// 	return false, errors.New(fmt.Sprintf("Error getting latest shaka release: %s", err))
 	// }
 
-	// logger.Info("Latest Shaka Release: ", versionString)
+	// Info("Latest Shaka Release: ", versionString)
 
 	// assets, err := GetReleaseAssets("shaka-project", "shaka-packager", versionID)
 	// if err != nil {
 	// 	return false, errors.New(fmt.Sprintf("Error getting shaka release assets: %s", err))
 	// }
 
-	// logger.Info("Shaka Release Assets: ", assets)
+	// Info("Shaka Release Assets: ", assets)
 
 	return true, nil
 }
@@ -108,7 +108,7 @@ func ShakaPackager() (bool, error) {
 
 // Main dependency checking function, runs checks for each dependency depending on the current OS
 func RunDependencyCheck() (bool, bool, bool, bool, error) {
-	logger.Info("Checking Dependencies...")
+	Info("Starting dependency check")
 
 	var err error
 	var ffmpegStatus bool = false

@@ -67,20 +67,20 @@ func DownloadFFMPEGWindows(version, dir string) error {
 
 	// Download FFMPEG Archive
 	url := fmt.Sprintf(FFMPEG_WIN_URL, version)
-	logger.Debugf("Downloading ffmpeg from: %s", url)
+	Debugf("Downloading ffmpeg from: %s", url)
 	err = DownloadFile(url, archivePath)
 	if err != nil {
 		return fmt.Errorf("Error downloading ffmpeg: %s", err)
 	}
 
-	logger.Debug("Writing FFMPEG Version file...")
+	Debug("Writing FFMPEG Version file...")
 	err = WriteVersionFile(dir, version)
 	if err != nil {
 		return fmt.Errorf("Error writing ffmpeg version file: %s", err)
 	}
 
 	// Extract the FFMPEG Archive
-	logger.Debugf("Unzipping ffmpeg to %s...", dir)
+	Debugf("Unzipping ffmpeg to %s...", dir)
 	err = DecompressWFilter(archivePath, dir, fmt.Sprintf("ffmpeg-%s-essentials_build/", version), []string{"bin/ffmpeg.exe"})
 	if err != nil {
 		return fmt.Errorf("Error unzipping ffmpeg: %s", err)
@@ -97,20 +97,20 @@ func DownloadFFMPEGMac(version, dir string) error {
 
 	// Download FFMPEG Archive
 	url := fmt.Sprintf(FFMPEG_MAC_VERSION_INFO_URL, version)
-	logger.Debugf("Downloading ffmpeg from: %s", url)
+	Debugf("Downloading ffmpeg from: %s", url)
 	err = DownloadFile(url, archivePath)
 	if err != nil {
 		return fmt.Errorf("Error downloading ffmpeg: %s", err)
 	}
 
-	logger.Debug("Writing FFMPEG Version file...")
+	Debug("Writing FFMPEG Version file...")
 	err = WriteVersionFile(dir, version)
 	if err != nil {
 		return fmt.Errorf("Error writing ffmpeg version file: %s", err)
 	}
 
 	// Extract the FFMPEG Archive
-	logger.Debugf("Unzipping ffmpeg to %s...", dir)
+	Debugf("Unzipping ffmpeg to %s...", dir)
 	err = DecompressWFilter(archivePath, dir, fmt.Sprintf("ffmpeg-%s/", version), []string{"ffmpeg"})
 	if err != nil {
 		return fmt.Errorf("Error unzipping ffmpeg: %s", err)

@@ -1,3 +1,3 @@
 @echo off
 
-../dist/udemy-downloader.exe
+.\dist\udemy-dl-go.exe -bearer %1 -course %2

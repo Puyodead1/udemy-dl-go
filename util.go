@@ -166,7 +166,7 @@ func DecompressWFilter(source, dest, remoteArchiveName string, filters []string)
 
 		for _, filter := range filters {
 			if strings.HasPrefix(hdr.Name, filter) {
-				logger.Debugf("%s matches filter %s", hdr.Name, filter)
+				Debugf("%s matches filter %s", hdr.Name, filter)
 				fname := filepath.Base(hdr.Name)
 				p := filepath.Join(dest, fname)
 
