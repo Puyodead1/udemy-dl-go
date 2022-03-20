@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -217,4 +218,9 @@ func ReadVersionFile(dir string) (string, error) {
 
 	lines := strings.Split(string(data), "\n")
 	return lines[1], nil
+}
+
+func CommandExists(cmd string) bool {
+	_, err := exec.LookPath(cmd)
+	return err == nil
 }

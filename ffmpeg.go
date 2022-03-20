@@ -120,8 +120,8 @@ func DownloadFFMPEGMac(version, dir string) error {
 }
 
 func DownloadFFMPEGLinux(version, dir string) error {
-	// TODO: Implement
-	return fmt.Errorf("Unsupported OS: %s", runtime.GOOS)
+	// TODO: At some point we should look into completing this
+	return fmt.Errorf("It looks like you're running linux, this script does not support installing FFMPEG binaries for linux yet :(\nPlease install FFMPEG via your systems package manager and re-run the script")
 }
 
 // Function to get the latest version of FFMPEG for current platform

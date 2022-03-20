@@ -8,6 +8,13 @@ import (
 func FFMPEGCheck() (bool, error) {
 	logger.Info("Checking FFMPEG...")
 
+	// check if ffmpeg is installed externally
+	exists := CommandExists("ffmpeg")
+	if exists {
+		logger.Info("FFMPEG appears to be installed already, probably via a package manager.")
+		return true, nil
+	}
+
 	var err error
 
 	// Ensure directory exists
