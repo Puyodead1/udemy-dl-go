@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: "actions/checkout@master"
       - name: "TODO to Issue"
-        uses: "alstr/todo-to-issue-action@v3.0.2-beta"
+        uses: "alstr/todo-to-issue-action@v4.6.3"
         id: "todo"
         with:
           AUTO_ASSIGN: true
